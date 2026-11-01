@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF Questioner · Tu asistente de PDFs</title>
+<style>
+  :root {
+    --fondo: #F7F4ED; --tarjeta: #FFFCF7; --principal: #1F4D3A; --hover: #163B28;
+    --acento: #B08D57; --texto: #2C2A28; --secundario: #706A63; --borde: #E4DDCF;
+    --lateral-texto: #E9E4D6;
+  }
+  :root[data-tema="oscuro"] {
+    --fondo: #171A18; --tarjeta: #212622; --principal: #2F7255; --hover: #3A8765;
+    --acento: #C9A56B; --texto: #ECE8DF; --secundario: #A39D92; --borde: #343A35;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    background: var(--fondo); color: var(--texto); min-height: 100vh;
+    display: flex; line-height: 1.5;
+  }
+  button { font-family: inherit; cursor: pointer; }
+
+  /* Barra lateral */
+  aside {
+    width: 240px; background: #1F4D3A; color: var(--lateral-texto);
+    padding: 28px 16px; display: flex; flex-direction: column; gap: 28px;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; padding: 0 8px; }
+  .logo svg { width: 28px; height: 28px; }
+  nav { display: flex; flex-direction: column; gap: 4px; }
+  nav button {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    background: none; border: 0; color: inherit; font-size: 15px;
+    padding: 11px 12px; border-radius: 10px; text-align: left;
+  }
+  nav button:hover { background: rgba(255,255,255,.08); }
+  nav button.activo { background: #F7F4ED; color: #1F4D3A; font-weight: 600; }
+  nav svg { width: 20px; height: 20px; flex: none; }
+  .hoja { margin-top: auto; opacity: .35; padding: 0 8px; }
+  .hoja svg { width: 56px; height: 56px; }
+
+  /* Contenido */
+  main { flex: 1; padding: 36px 48px; max-width: 900px; margin: 0 auto; width: 100%; position: relative; }
+  .tema {
+    position: absolute; top: 28px; right: 36px; background: none; border: 0;
+    color: var(--acento); width: 40px; height: 40px; border-radius: 50%;
+  }
+  .tema:hover { background: var(--borde); }
+  .tema svg { width: 22px; height: 22px; }
+  h1 { font-size: 30px; color: var(--principal); }
+  :root[data-tema="oscuro"] h1 { color: var(--texto); }
+  .sub { color: var(--secundario); margin: 4px 0 24px; }
+  .vista { display: none; }
+  .vista.activa { display: block; }
+
+  /* Zona de subida */
+  .zona {
+    background: var(--tarjeta); border: 2px dashed var(--acento); border-radius: 16px;
+    padding: 28px 20px; text-align: center; cursor: pointer; transition: .15s;
+  }
+  .zona:hover, .zona.arrastrando { background: var(--borde); border-color: var(--principal); }
+  .zona svg { width: 44px; height: 44px; color: var(--principal); }
+  :root[data-tema="oscuro"] .zona svg { color: var(--acento); }
+  .zona strong { display: block; margin-top: 8px; font-size: 17px; }
+  .zona span { color: var(--secundario); font-size: 14px; }
+    .estado { margin-top: 14px; font-size: 15px; }
+  .estado:empty { display: none; }
+  .estado.cargando, .estado.ok, .estado.error {
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+    border-radius: 12px; background: var(--tarjeta); border: 1px solid var(--borde);
+  }
+  .estado.cargando { border-color: var(--acento); }
+  .estado.ok { border-color: var(--principal); color: var(--principal); font-weight: 600; }
+  :root[data-tema="oscuro"] .estado.ok { color: #6FCF9F; border-color: #6FCF9F; }
+  .estado.error { border-color: #B3382C; color: #B3382C; font-weight: 600; }
+  .spinner {
+    width: 20px; height: 20px; flex: none; border-radius: 50%;
+    border: 3px solid var(--borde); border-top-color: var(--acento);
+    animation: giro .8s linear infinite;
+  }
+  @keyframes giro { to { transform: rotate(360deg); } }
+  .zona.bloqueada { pointer-events: none; opacity: .55; }
+  .docs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .doc { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+
+  /* Conversación */
+  #mensajes { display: flex; flex-direction: column; gap: 14px; margin: 24px 0 16px; }
+  .msg { max-width: 85%; padding: 12px 16px; border-radius: 16px; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.yo { align-self: flex-end; background: var(--principal); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.bot { align-self: flex-start; background: var(--tarjeta); border: 1px solid var(--borde); border-bottom-left-radius: 4px; }
+  .fuentes { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--borde); white-space: normal; }
+  .fuentes small { display: block; color: var(--secundario); margin-bottom: 6px; font-size: 12px; }
+  .fuente {
+    display: inline-block; background: var(--fondo); border: 1px solid var(--acento);
+    color: var(--texto); border-radius: 8px; padding: 2px 10px; font-size: 13px; margin: 0 6px 6px 0;
+  }
+  .pensando span { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%; background: var(--acento); animation: salto 1s infinite; }
+  .pensando span:nth-child(2) { animation-delay: .15s; }
+  .pensando span:nth-child(3) { animation-delay: .3s; }
+  @keyframes salto { 0%,60%,100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-6px); opacity: 1; } }
+
+  /* Caja de pregunta */
+  .caja {
+    display: flex; gap: 8px; background: var(--tarjeta); border: 1px solid var(--borde);
+    border-radius: 14px; padding: 8px 8px 8px 16px; box-shadow: 0 2px 8px rgba(0,0,0,.05);
+  }
+  .caja:focus-within { border-color: var(--principal); }
+  .caja input { flex: 1; border: 0; outline: 0; background: none; font: inherit; color: var(--texto); font-size: 16px; }
+  .caja button {
+    background: var(--principal); color: #fff; border: 0; width: 44px; height: 44px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .caja button:hover:not(:disabled) { background: var(--hover); }
+  .caja button:disabled { opacity: .5; cursor: not-allowed; }
+  .caja svg { width: 20px; height: 20px; }
+  .ejemplos { margin-top: 16px; }
+  .ejemplos p { font-size: 13px; color: var(--secundario); margin-bottom: 8px; }
+  .chip {
+    background: var(--tarjeta); border: 1px solid var(--borde); color: var(--texto);
+    border-radius: 999px; padding: 6px 14px; font-size: 14px; margin: 0 8px 8px 0;
+  }
+  .chip:hover { border-color: var(--acento); }
+
+  /* Historial y acerca de */
+  .item-hist {
+    background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px;
+    padding: 12px 16px; margin-bottom: 10px; cursor: pointer;
+  }
+  .item-hist:hover { border-color: var(--acento); }
+  .vacio { color: var(--secundario); }
+  .tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; padding: 20px 24px; }
+  .tarjeta ol { margin: 12px 0 0 20px; }
+  .tarjeta li { margin-bottom: 6px; }
+
+    .acciones { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+  .limpiar {
+    display: inline-flex; align-items: center; gap: 8px; background: var(--principal);
+    border: 0; color: #fff; border-radius: 999px;
+    padding: 10px 18px; font-size: 14px; font-weight: 600;
+  }
+  .limpiar:hover { background: var(--hover); }
+  .limpiar[hidden] { display: none; }
+  .limpiar svg { width: 16px; height: 16px; }
+  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--borde); font-size: 13px; color: var(--secundario); text-align: center; }
+  footer a { color: var(--acento); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  .nota { margin-top: 16px; }
+
+  :focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
+
+  @media (max-width: 800px) {
+    body { flex-direction: column; }
+    aside { width: 100%; height: auto; position: static; flex-direction: row; align-items: center; padding: 12px; gap: 8px; overflow-x: auto; }
+    .logo span, .hoja { display: none; }
+    nav { flex-direction: row; }
+    nav button { padding: 8px 12px; white-space: nowrap; }
+    main { padding: 24px 16px; }
+    .tema { top: 12px; right: 8px; }
+    h1 { font-size: 24px; margin-top: 8px; }
+    .msg { max-width: 95%; }
+  }
+</style>
+</head>
+<body>
+
+<aside>
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
+    <span>PDF Questioner</span>
+  </div>
+  <nav>
+    <button class="activo" data-vista="inicio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8M5 10v10h14V10"/></svg>Inicio</button>
+    <button data-vista="historial"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Historial</button>
+    <button data-vista="acerca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>Acerca de</button>
+  </nav>
+  <div class="hoja">
+    <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 54C12 28 30 12 54 10c0 24-14 42-40 44z"/><path d="M12 54C24 40 34 30 46 20"/></svg>
+  </div>
+</aside>
+
+<main>
+  <button class="tema" id="tema" title="Cambiar entre modo claro y oscuro" aria-label="Cambiar tema">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+  </button>
+
+  <!-- INICIO -->
+  <section class="vista activa" id="vista-inicio">
+    <h1>Tu asistente de PDFs</h1>
+    <p class="sub">Sube un documento y haz tus preguntas.</p>
+
+    <div class="zona" id="zona" tabindex="0" role="button" aria-label="Subir un PDF">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 18v-6M9.5 14.5L12 12l2.5 2.5"/></svg>
+      <strong>Arrastra tu PDF aquí</strong>
+      <span>o haz clic para subir</span>
+    </div>
+    <input type="file" id="archivo" accept="application/pdf,.pdf" hidden>
+    <div class="estado" id="estado" role="status" aria-live="polite"></div>
+    <div class="docs" id="docs"></div>
+
+    <div id="mensajes" aria-live="polite"></div>
+
+    <div class="acciones">
+      <button class="limpiar" id="limpiar" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+        Borrar PDFs e inicar de nuevo
+      </button>
+    </div>
+
+    <div class="caja">
+      <input id="pregunta" type="text" placeholder="Escribe tu pregunta..." aria-label="Escribe tu pregunta" autocomplete="off">
+      <button id="enviar" title="Enviar pregunta" aria-label="Enviar pregunta">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>
+      </button>
+    </div>
+
+    <div class="ejemplos">
+      <p>Ejemplos de preguntas:</p>
+      <button class="chip">¿Cuál es el resumen?</button>
+      <button class="chip">¿Cuáles son los puntos clave?</button>
+      <button class="chip">Explícame esto más fácil</button>
+    </div>
+  </section>
+
+  <!-- HISTORIAL -->
+  <section class="vista" id="vista-historial">
+    <h1>Historial</h1>
+    <p class="sub">Las preguntas que has hecho en esta sesión.</p>
+    <div id="lista-historial"></div>
+  </section>
+
+  <!-- ACERCA DE -->
+  <section class="vista" id="vista-acerca">
+    <h1>Acerca de</h1>
+    <p class="sub">Cómo funciona este asistente.</p>
+        <div class="tarjeta">
+      <p>Este proyecto fue pensado para quienes necesitan ayuda en el ámbito laboral, educativo y personal, y para estudiantes, con el propósito de nutrir sus conocimientos y mejorar su análisis de información.</p>
+      <p style="margin-top:12px">PDF Questioner responde solo con lo que dicen tus documentos y siempre te indica de qué archivo y página sacó la información.</p>
+      <ol>
+        <li>Sube un PDF con texto (los escaneados como imagen no funcionan).</li>
+        <li>Espera el mensaje verde de que quedó listo.</li>
+        <li>Escribe tu pregunta y presiona Enter.</li>
+        <li>Usa «Nueva consulta» para empezar de cero.</li>
+      </ol>
+    </div>
+    <div class="tarjeta nota">
+      <strong>Requisitos y privacidad</strong>
+      <p style="margin-top:8px">Funciona con Ollama (modelo llama3.2), que se ejecuta en tu propio equipo. Por eso tus documentos no salen de tu computadora. Se recomienda tener <strong>8 GB de RAM o más</strong>; con menos memoria puede responder muy lento.</p>
+    </div>
+  </section>
+    <footer>
+    Creado por Pablo Hernández ·
+    <a href="https://github.com/pablojherpiz" target="_blank" rel="noopener">GitHub</a> ·
+    <a href="mailto:pablojherpiz@gmail.com">pablojherpiz@gmail.com</a>
+  </footer>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const zona = $("zona"), archivo = $("archivo"), estado = $("estado");
+const mensajes = $("mensajes"), pregunta = $("pregunta"), enviar = $("enviar");
+const historial = [];
+
+/* Navegación */
+document.querySelectorAll("nav button").forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("activo", x === b));
+    document.querySelectorAll(".vista").forEach((v) => v.classList.toggle("activa", v.id === "vista-" + b.dataset.vista));
+    if (b.dataset.vista === "historial") pintarHistorial();
+  };
+});
+
+/* Tema claro / oscuro */
+try { if (localStorage.getItem("tema") === "oscuro") document.documentElement.dataset.tema = "oscuro"; } catch (e) {}
+$("tema").onclick = () => {
+  const r = document.documentElement;
+  r.dataset.tema = r.dataset.tema === "oscuro" ? "" : "oscuro";
+  try { localStorage.setItem("tema", r.dataset.tema); } catch (e) {}
+};
+
+/* Subir PDF */
+zona.onclick = () => archivo.click();
+zona.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); archivo.click(); } };
+zona.ondragover = (e) => { e.preventDefault(); zona.classList.add("arrastrando"); };
+zona.ondragleave = () => zona.classList.remove("arrastrando");
+zona.ondrop = (e) => {
+  e.preventDefault(); zona.classList.remove("arrastrando");
+  if (e.dataTransfer.files[0]) subir(e.dataTransfer.files[0]);
+};
+archivo.onchange = () => { if (archivo.files[0]) subir(archivo.files[0]); archivo.value = ""; };
+
+function mostrar(texto, clase) {
+  estado.className = "estado " + (clase || "");
+  estado.textContent = "";
+  if (clase === "cargando") {
+    const s = document.createElement("div");
+    s.className = "spinner";
+    estado.appendChild(s);
+  }
+  const t = document.createElement("span");
+  t.textContent = texto;
+  estado.appendChild(t);
+}
+
+async function subir(f) {
+  if (zona.classList.contains("bloqueada")) return;
+  if (!f.name.toLowerCase().endsWith(".pdf")) { mostrar("Solo se aceptan archivos PDF.", "error"); return; }
+  zona.classList.add("bloqueada");
+  enviar.disabled = true; pregunta.disabled = true;
+  mostrar("Procesando «" + f.name + "». Puede tardar un par de minutos, no cierres la página.", "cargando");
+  const datos = new FormData();
+  datos.append("file", f);
+  try {
+    const r = await fetch("/documents", { method: "POST", body: datos });
+    if (!r.ok) throw new Error();
+    mostrar("✓ «" + f.name + "» está listo. Ya puedes hacer preguntas.", "ok");
+    const d = document.createElement("span");
+    d.className = "doc"; d.textContent = "📄 " + f.name;
+    $("docs").appendChild(d);
+    $("limpiar").hidden = false;
+  } catch (e) {
+    mostrar("No se pudo procesar el archivo. Revisa que sea un PDF con texto e inténtalo de nuevo.", "error");
+  }
+  zona.classList.remove("bloqueada");
+  enviar.disabled = false; pregunta.disabled = false;
+}
+
+/* Preguntar */
+function burbuja(texto, clase) {
+  $("limpiar").hidden = false;
+  const d = document.createElement("div");
+  d.className = "msg " + clase; d.textContent = texto;
+  mensajes.appendChild(d);
+  d.scrollIntoView({ behavior: "smooth", block: "end" });
+  return d;
+}
+
+async function preguntar(texto) {
+  texto = texto.trim();
+  if (!texto) return;
+  historial.unshift(texto);
+  burbuja(texto, "yo");
+  pregunta.value = ""; enviar.disabled = true;
+  const espera = burbuja("", "bot pensando");
+  espera.innerHTML = "<span></span><span></span><span></span>";
+  try {
+    const r = await fetch("/ask", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: texto }),
+    });
+    if (!r.ok) throw new Error();
+    const datos = await r.json();
+    espera.className = "msg bot"; espera.textContent = datos.answer;
+    const vistas = new Set(), etiquetas = [];
+    (datos.sources || []).forEach((s) => {
+      const k = s.source + " · p. " + s.page;
+      if (!vistas.has(k)) { vistas.add(k); etiquetas.push(k); }
+    });
+    if (etiquetas.length) {
+      const caja = document.createElement("div");
+      caja.className = "fuentes";
+      caja.innerHTML = "<small>Fuentes consultadas</small>";
+      etiquetas.forEach((t) => {
+        const s = document.createElement("span");
+        s.className = "fuente"; s.textContent = "📄 " + t;
+        caja.appendChild(s);
+      });
+      espera.appendChild(caja);
+    }
+  } catch (e) {
+    espera.className = "msg bot";
+    espera.textContent = "Algo salió mal. Revisa que hayas subido un PDF y que Ollama esté abierto, e inténtalo otra vez.";
+  }
+  enviar.disabled = false; pregunta.focus();
+  espera.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+enviar.onclick = () => preguntar(pregunta.value);
+pregunta.onkeydown = (e) => { if (e.key === "Enter" && !enviar.disabled) preguntar(pregunta.value); };
+document.querySelectorAll(".chip").forEach((c) => (c.onclick = () => preguntar(c.textContent)));
+
+$("limpiar").onclick = async () => {
+  if (!confirm("Se borrará el PDF y la conversación. ¿Continuar?")) return;
+  try {
+    const r = await fetch("/documents", { method: "DELETE" });
+    if (!r.ok) throw new Error();
+  } catch (e) {
+    mostrar("No se pudo borrar el PDF. Inténtalo de nuevo.", "error");
+    return;
+  }
+  mensajes.innerHTML = "";
+  pregunta.value = "";
+  $("docs").innerHTML = "";
+  estado.className = "estado";
+  estado.textContent = "";
+  $("limpiar").hidden = true;
+};
+
+function pintarHistorial() {
+  const lista = $("lista-historial");
+  lista.innerHTML = "";
+  if (!historial.length) { lista.innerHTML = '<p class="vacio">Todavía no has hecho preguntas.</p>'; return; }
+  historial.forEach((q) => {
+    const d = document.createElement("div");
+    d.className = "item-hist"; d.textContent = q;
+    d.onclick = () => { document.querySelector('[data-vista="inicio"]').click(); pregunta.value = q; pregunta.focus(); };
+    lista.appendChild(d);
+  });
+}
+</script>
+</body>
+</html>

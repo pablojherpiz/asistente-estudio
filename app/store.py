@@ -29,3 +29,9 @@ def add_document(path):
 def search(question, k=4):
     r = get_collection().query(query_texts=[question], n_results=k)
     return list(zip(r["documents"][0], r["metadatas"][0]))
+
+def clear_documents():
+    collection = get_collection()
+    ids = collection.get()["ids"]
+    if ids:
+        collection.delete(ids=ids)
