@@ -1,4 +1,8 @@
+import os
 import ollama
+
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+_client = ollama.Client(host=OLLAMA_HOST)
 
 SYSTEM = (
     "Eres un asistente de estudio. Responde en español usando únicamente la "
@@ -15,7 +19,7 @@ def answer(question, passages):
     context = "\n\n".join(
         f"[{m['source']}, p. {m['page']}]\n{doc}" for doc, m in passages
     )
-    response = ollama.chat(
+    response = _client.chat(
         model="llama3.2",
         messages=[
             {"role": "system", "content": SYSTEM},
