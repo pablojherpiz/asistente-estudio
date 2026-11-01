@@ -20,3 +20,10 @@ def test_ask_devuelve_respuesta_y_fuentes():
 def test_ask_sin_texto_da_422():
     r = client.post("/ask", json={})
     assert r.status_code == 422
+
+def test_borrar_documentos():
+    with patch("app.main.clear_documents") as limpiar:
+        r = client.delete("/documents")
+    assert r.status_code == 200
+    assert r.json() == {"status": "borrado"}
+    limpiar.assert_called_once()
